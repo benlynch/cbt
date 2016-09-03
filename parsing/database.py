@@ -19,6 +19,7 @@ def create_db():
 def insert(values):
     c = conn.cursor()
     c.execute('INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ? ,?, ?)', values)
+    print values 
     conn.commit()
 
 def update_readbw(hashval, bw):
@@ -68,3 +69,15 @@ def fetch_table(params):
              writerow = []
              readrow = []
     return table
+
+def fetch_bw(testname, params):
+    c = conn.cursor()
+    table = []
+    c.execute('SELECT readbw, writebw FROM results WHERE testname = "' + testname + '" AND testtype = "' + params[0] + '" AND opsize = '+ str(params[1]) )
+    for row in c.fetchall():
+        print row
+        table.append(row)
+    return table;
+
+
+
