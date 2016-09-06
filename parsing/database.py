@@ -12,14 +12,14 @@ def create_db():
     for key in FORMAT:
         values.append("%s %s" % (key,TYPES[key]))
     q += ', '.join(values)+')'
-    print q
+#    print (q)
     c.execute(q)
     conn.commit()
 
 def insert(values):
     c = conn.cursor()
     c.execute('INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ? ,?, ?)', values)
-    print values 
+#    print (values) 
     conn.commit()
 
 def update_readbw(hashval, bw):
@@ -68,6 +68,7 @@ def fetch_table(params):
              table.append(pre + [['optype', 'read']] + readrow)
              writerow = []
              readrow = []
+#    print(table)
     return table
 
 def fetch_bw(testname, params):
@@ -75,7 +76,7 @@ def fetch_bw(testname, params):
     table = []
     c.execute('SELECT readbw, writebw FROM results WHERE testname = "' + testname + '" AND testtype = "' + params[0] + '" AND opsize = '+ str(params[1]) )
     for row in c.fetchall():
-        print row
+#        print (row)
         table.append(row)
     return table;
 
