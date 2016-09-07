@@ -4,6 +4,17 @@ mpl.use('Agg')
 import cbtworkspace
 import yaml
 import argparse
+import os
+
+def check_graph_options (doc):
+    if 'radosbench' in doc.keys():
+        if isinstance(doc['radosbench']["write"]["x"]["sizes"], list):
+            print("looks good")
+        else:
+            print("Not sure what to plot")
+            parser.print_help()
+            sys.exit()
+    return;
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Graph output from CBT')
