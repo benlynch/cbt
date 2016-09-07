@@ -14,6 +14,7 @@ from os import listdir
 import sys
 sys.path.append("/home/support/blynch/cbt/parsing")
 import database
+import parsing
 class cbtWorkspace:
     def __init__(self, path):
         self.path = path
@@ -35,9 +36,6 @@ class cbtWorkspace:
         doc = {'radosbench':{'write':{'x':{'sizes':[ 4096, 16384, 65536, 262144, 1048576, 4194304 ], 'concurrent':2},'y':{'log':True,'bar_label':True}}}}
    
         args['doc'] = doc
-
-#        with open(args.config, 'r') as f:
-#            doc = yaml.load(f)
 
         if 'radosbench' in doc.keys():
             if 'write' in doc['radosbench'].keys():
@@ -75,7 +73,7 @@ def check_graph_options (doc):
     return;
 
 def create_rados_graphs( params, args ):
-    pcolors = ['#0d3c55', '#c02e1d','#f16c20','#ebc844','#a2b86c','#1395ba']
+    pcolors = ['#0f5b78','#ef8b2c','#5ca793','#d94e1f','#117899','#ecaa38', '#0d3c55', '#c02e1d','#f16c20','#ebc844','#a2b86c','#1395ba']
     semilog = False
     iteration = 0
     if params["write"]["y"]["log"] == True:
@@ -155,42 +153,6 @@ def getbw(s):
 def mkhash(values):
     value_string = (''.join([str(i) for i in values])).encode('utf-8')
     return hashlib.sha256(value_string).hexdigest()
-
-def parse_output( test, args ):
-    if test == 'radosbench':
-        database.create_db()
-        files = []
-        for archive in args['archive']:
-            directory = args['path'] + '/'+ archive 
-            files.extend(find('output.*', directory))
-        for inputname in files:
-            filepattern = re.compile(args['path'] + '/' + '(.+)')
-            m = filepattern.match(inputname)
-            mydirectory = m.group(1)
-            params = mydirectory.split("/")
-            # make readahead into an int
-            params[3] = int(params[3][7:])
-            # Make op_size into an int
-            params[4] = int(params[4][8:])
-            # Make cprocs into an int
-            params[5] = int(params[5][17:])
-            params[7] = params[6]
-            params[6] = random.random()
-            params_hash = mkhash(params)
-            params = [params_hash] + params
-            params.extend([0,0])
-            database.insert(params)
-            pattern = re.compile('Bandwidth \(MB/sec\):\s+(\d+\.\d+)')
-            for line in open(inputname):
-                m = pattern.match(line)
-                if m:
-                    bw = float(m.group(1))
-                    if  params[8] == 'write':
-                        database.update_writebw(params_hash, bw)
-                    else:
-                        database.update_readbw(params_hash, bw)
-    if test == 'fio':
-        print("soon")
 
 def rados_get_write_bandwidth( testname, size ):
     mytable = database.fetch_bw(testname, ['write',size])

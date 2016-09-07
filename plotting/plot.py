@@ -6,7 +6,15 @@ import yaml
 import argparse
 import os
 
-def check_graph_options (doc):
+def check_graph_options (args, doc):
+    for path in (args.archive):
+        if os.path.isdir(path):
+            print(" ")
+        else:
+            print("Archive directory does not exist")
+            parser.print_help()
+            sys.exit()
+
     if 'radosbench' in doc.keys():
         if isinstance(doc['radosbench']["write"]["x"]["sizes"], list):
             print("looks good")
@@ -25,23 +33,16 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
 
-    for path in (args.archive):
-        if os.path.isdir(path):
-            print(" ")
-        else:
-            print("Archive directory does not exist")
-            parser.print_help()
-            sys.exit()
-
     with open(args.config, 'r') as f:
         doc = yaml.load(f)
 
-    check_graph_options(doc)
+    check_graph_options(args, doc)
 
     if 'radosbench' in doc.keys():
         print("Reading RADOS Bench output")
         if 'write' in doc['radosbench'].keys():
-            parse_output('radosbench')
+            parse_output('radosbench', args)
             create_rados_graphs( doc['radosbench'] )   
-
-
+    if 'fio' in doc.keys():
+        print("Reading FIO output")
+        
