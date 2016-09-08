@@ -1,20 +1,13 @@
-import random
-import fnmatch
-#import matplotlib as mpl
-#mpl.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.axes as ax
 import pandas as pd
 import numpy as np
-import hashlib
 import os
 import re
-import yaml
 from os import listdir
 import sys
 sys.path.append("/home/support/blynch/cbt/parsing")
-import database
-import parsing
+import parse
 class cbtWorkspace:
     def __init__(self, path):
         self.path = path
@@ -26,20 +19,24 @@ class cbtWorkspace:
         return self.path
 
     def ls(self):
-        return listdir(self.path)
+        dirlist = []
+        for file in listdir(self.path):
+            if os.path.isdir(self.path + '/' + file):
+                dirlist.append(file)
+        return dirlist
 
-    def plot_compare(self, benchmark_runs, test_type, fancy_title):
+    def bar_graph(self, benchmark_runs, test_type, title='Insert Fancy Title Here', object_sizes=[],
+            log=True, bar_label=True):
         args = {}
         args['path'] = self.path
         args['archive'] = benchmark_runs
-        args['title'] = fancy_title
-        doc = {'radosbench':{'write':{'x':{'sizes':[ 4096, 16384, 65536, 262144, 1048576, 4194304 ], 'concurrent':2},'y':{'log':True,'bar_label':True}}}}
-   
+        args['title'] = title
+        object_sizes=[ 4096, 16384, 65536, 262144, 1048576, 4194304 ]
+        doc = {'radosbench':{'write':{'x':{'sizes':object_sizes, 'concurrent':2},'y':{'log':log,'bar_label':bar_label}}}}
         args['doc'] = doc
-
         if 'radosbench' in doc.keys():
             if 'write' in doc['radosbench'].keys():
-                parse_output('radosbench', args)
+                parse.parse_output('radosbench', args)
                 create_rados_graphs( doc['radosbench'], args)
 
 def bar_label(ax, rects, semilog):
@@ -72,6 +69,53 @@ def check_graph_options (doc):
             sys.exit()
     return;
 
+def create_bar_graph( data=[[[4096, 16384],[21.3, 34.1]]], semilog=False, add_bar_labels=True, title='Insert Fancy Title'):
+    pcolors = ['#0f5b78','#ef8b2c','#5ca793','#d94e1f','#117899','#ecaa38', '#0d3c55', '#c02e1d','#f16c20','#ebc844','#a2b86c','#1395ba']
+    if len(data) > 1:
+    #plot comparison from multiple archives
+        rect_refs = []
+        width = 0.35
+        ind = np.arange(len(xs))
+        fig, ax = plt.subplots()
+        bar_shift = width/2
+        for series in super_series:
+            color = pcolors.pop()
+            rects = ax.bar(ind + bar_shift, series, width, color=color)
+            rect_refs.append(rects[0])
+            if semilog:
+              ax.set_yscale('log')
+            bar_shift += width
+            if add_bar_labels:
+                bar_label(ax, rects, semilog)
+        ax.set_xticks(ind + width*3/2)
+        ax.legend(rect_refs, args['archive'], loc=2)
+    else:
+        width = 0.5
+        color = pcolors.pop()
+        xs = data[0][0]
+        ys = data[0][1]
+        ind = np.arange(len(xs))
+        fig, ax =  plt.subplots()
+        rects = ax.bar(ind + width, ys, color=color)
+#        ax.set_xticks(ind + width*3/2)
+        ax.set_xticks(ind)
+        if semilog:
+            ax.set_yscale('log')
+        if add_bar_labels:
+            bar_label(ax, rects, semilog)
+
+    fig.set_size_inches(9,6)
+    ax.set_xticklabels(xs, rotation=0)
+    ax.set_title(title)
+    ax.set_xlabel("Object Size (Bytes)")
+    ax.set_ylabel('MB/s')
+    plt.show()
+    plt.savefig('foo.png')
+    return;
+
+
+ 
+
 def create_rados_graphs( params, args ):
     pcolors = ['#0f5b78','#ef8b2c','#5ca793','#d94e1f','#117899','#ecaa38', '#0d3c55', '#c02e1d','#f16c20','#ebc844','#a2b86c','#1395ba']
     semilog = False
@@ -85,7 +129,7 @@ def create_rados_graphs( params, args ):
         for testtype in args['archive']:
             ys = []
             for size in xs:
-                ys.append(rados_get_write_bandwidth(testtype, size))
+                ys.append(parse.rados_get_write_bandwidth(testtype, size))
             y_values.append(ys)
     super_series = []
     for ys in y_values:
@@ -133,30 +177,6 @@ def create_rados_graphs( params, args ):
     plt.show()
     plt.savefig('foo.png')
     return;
-
-def find(pattern, path):
-    result = []
-    for root, dirs, files in os.walk(path):
-        for name in files:
-            if fnmatch.fnmatch(name, pattern):
-                result.append(os.path.join(root, name))
-    return result
-
-def getbw(s):
-    if "GB/s" in s:
-        return float(s[:-4])*1024
-    if "MB/s" in s:
-        return float(s[:-4])
-    if "KB/s" in s:
-        return float(s[:-4])/1024
-
-def mkhash(values):
-    value_string = (''.join([str(i) for i in values])).encode('utf-8')
-    return hashlib.sha256(value_string).hexdigest()
-
-def rados_get_write_bandwidth( testname, size ):
-    mytable = database.fetch_bw(testname, ['write',size])
-    return float(mytable[0][1]);
 
 
 

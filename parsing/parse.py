@@ -1,3 +1,34 @@
+import os
+import database
+import fnmatch
+import re
+import random
+import hashlib
+
+def find(pattern, path):
+    result = []
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if fnmatch.fnmatch(name, pattern):
+                result.append(os.path.join(root, name))
+    return result
+
+def getbw(s):
+    if "GB/s" in s:
+        return float(s[:-4])*1024
+    if "MB/s" in s:
+        return float(s[:-4])
+    if "KB/s" in s:
+        return float(s[:-4])/1024
+
+def mkhash(values):
+    value_string = (''.join([str(i) for i in values])).encode('utf-8')
+    return hashlib.sha256(value_string).hexdigest()
+
+def rados_get_write_bandwidth( testname, size ):
+    mytable = database.fetch_bw(testname, ['write',size])
+    return float(mytable[0][1]);
+
 def parse_output( test, args ):
     if test == 'radosbench':
         database.create_db()
