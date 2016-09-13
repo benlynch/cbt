@@ -32,12 +32,17 @@ class cbtWorkspace:
         args['archive'] = benchmark_runs
         args['title'] = title
         object_sizes=[ 4096, 16384, 65536, 262144, 1048576, 4194304 ]
-        doc = {'radosbench':{'write':{'x':{'sizes':object_sizes, 'concurrent':2},'y':{'log':log,'bar_label':bar_label}}}}
+        if test_type == 'rados_write':
+            doc = {'radosbench':{'write':{'x':{'sizes':object_sizes, 'concurrent':2},'y':{'log':log,'bar_label':bar_label}}}}
+        if test_type == 'rados_read_seq':
+            doc = {'radosbench':{'seq':{'x':{'sizes':object_sizes, 'concurrent':2},'y':{'log':log,'bar_label':bar_label}}}}
+        if test_type == 'rados_read_rand':
+            doc = {'radosbench':{'rand':{'x':{'sizes':object_sizes, 'concurrent':2},'y':{'log':log,'bar_label':bar_label}}}}
         args['doc'] = doc
         if 'radosbench' in doc.keys():
-            if 'write' in doc['radosbench'].keys():
-                parse.parse_output('radosbench', args)
-                create_rados_graphs( doc['radosbench'], args)
+            parse.parse_output('radosbench', args)
+            create_rados_graphs(args)
+        
 
 def bar_label(ax, rects, semilog):
     (y_bottom, y_top) = ax.get_ylim()
@@ -69,41 +74,56 @@ def check_graph_options (doc):
             sys.exit()
     return;
 
-def create_bar_graph( data=[[[4096, 16384],[21.3, 34.1]]], semilog=False, add_bar_labels=True, title='Insert Fancy Title'):
+def create_bar_graph( data=[[[1, 2],[10, 20]]], semilog=False, add_bar_labels=True, title='Insert Fancy Title', add_legend=False):
     pcolors = ['#0f5b78','#ef8b2c','#5ca793','#d94e1f','#117899','#ecaa38', '#0d3c55', '#c02e1d','#f16c20','#ebc844','#a2b86c','#1395ba']
+    width = 0.35
+    xs = data[0][0]
     if len(data) > 1:
     #plot comparison from multiple archives
+        all_unique_x = {}
+        for series in data:
+            for size in series[0]:
+                all_unique_x[size] = True
+        ind = np.arange(len(all_unique_x.keys()))
         rect_refs = []
-        width = 0.35
-        ind = np.arange(len(xs))
         fig, ax = plt.subplots()
         bar_shift = width/2
-        for series in super_series:
+        #plot individual bars to allow for sparse data plots
+        for series in data:
+            if len(series) > 2:
+                label = series[2]
             color = pcolors.pop()
-            rects = ax.bar(ind + bar_shift, series, width, color=color)
-            rect_refs.append(rects[0])
-            if semilog:
-              ax.set_yscale('log')
+            index = 0
+            labeled_yet = False
+            for ex in all_unique_x.keys():
+                for i in range(0, len(series[0])):
+                    if series[0][i] == ex:
+                        if 'label' in locals() and not labeled_yet:
+                            rects = ax.bar(index + bar_shift, series[1][i], width, color=color, label=label)
+                            labeled_yet = True
+                        else:
+                            rects = ax.bar(index + bar_shift, series[1][i], width, color=color)
+                        rect_refs.append(rects[0])
+                        if add_bar_labels:
+                            bar_label(ax, rects, semilog)
+                index += 1
             bar_shift += width
-            if add_bar_labels:
-                bar_label(ax, rects, semilog)
+        if semilog:
+            ax.set_yscale('log')
         ax.set_xticks(ind + width*3/2)
-        ax.legend(rect_refs, args['archive'], loc=2)
+        if add_legend:
+            plt.legend(loc=2)
     else:
-        width = 0.5
         color = pcolors.pop()
-        xs = data[0][0]
         ys = data[0][1]
         ind = np.arange(len(xs))
         fig, ax =  plt.subplots()
-        rects = ax.bar(ind + width, ys, color=color)
-#        ax.set_xticks(ind + width*3/2)
-        ax.set_xticks(ind)
+        rects = ax.bar(ind + width,  ys, color=color)
+        ax.set_xticks(ind + width*2)
         if semilog:
             ax.set_yscale('log')
         if add_bar_labels:
             bar_label(ax, rects, semilog)
-
     fig.set_size_inches(9,6)
     ax.set_xticklabels(xs, rotation=0)
     ax.set_title(title)
@@ -115,69 +135,27 @@ def create_bar_graph( data=[[[4096, 16384],[21.3, 34.1]]], semilog=False, add_ba
 
 
  
-
-def create_rados_graphs( params, args ):
-    pcolors = ['#0f5b78','#ef8b2c','#5ca793','#d94e1f','#117899','#ecaa38', '#0d3c55', '#c02e1d','#f16c20','#ebc844','#a2b86c','#1395ba']
+def create_rados_graphs( args ):
+    add_bar_labels = True 
     semilog = False
-    iteration = 0
-    if params["write"]["y"]["log"] == True:
-      semilog = True
-    if 'write' in params.keys():
+    data = []
+    params = args['doc']['radosbench']
+    for testkey, test in params.items():
+        if test["y"]["log"] == True:
+            semilog = True
+        if 'y' in params[testkey].keys():
+            if 'bar_label' in test['y'].keys():
+                add_bar_labels = test['y']["bar_label"]
         y_values = []
-        xs = params["write"]["x"]["sizes"]
-        concurrent = params["write"]["x"]["concurrent"]
-        for testtype in args['archive']:
+        xs = test["x"]["sizes"]
+        concurrent = test["x"]["concurrent"]
+        for testname in args['archive']:
             ys = []
             for size in xs:
-                ys.append(parse.rados_get_write_bandwidth(testtype, size))
+                ys.append(parse.get_rados_bandwidth(testname, testkey, size))
             y_values.append(ys)
-    super_series = []
-    for ys in y_values:
-        series = pd.Series.from_array(ys)
-        super_series.append(series)
-
-  #  plt.figure(figsize=(9, 6))
-
-    if len(super_series) > 1:
-    #plot comparison from multiple archives
-        rect_refs = []
-        width = 0.35
-        ind = np.arange(len(xs))
-        fig, ax = plt.subplots()
-        bar_shift = width/2
-        for series in super_series:
-            color = pcolors.pop()
-            rects = ax.bar(ind + bar_shift, series, width, color=color)
-            rect_refs.append(rects[0])
-            if semilog:
-              ax.set_yscale('log')
-            bar_shift += width
-            if params["write"]["y"]["bar_label"]:
-                bar_label(ax, rects, semilog)
-        ax.set_xticks(ind + width*3/2)
-        ax.legend(rect_refs, args['archive'], loc=2)
-    else:
-        width = 0.5
-        color = pcolors.pop()
-        ind = np.arange(len(xs))
-        fig, ax =  plt.subplots()
-        rects = ax.bar(ind + width, series, color=color)
-        ax.set_xticks(ind + width*3/2)
-        if semilog:
-            ax.set_yscale('log')
-
-        if params["write"]["y"]["bar_label"]:
-            bar_label(ax, rects, semilog)
-
-    fig.set_size_inches(9,6)
-    ax.set_xticklabels(xs, rotation=0)
-    ax.set_title(args['title'])
-    ax.set_xlabel("Object Size (Bytes)")
-    ax.set_ylabel('MB/s')
-    plt.show()
-    plt.savefig('foo.png')
+            data.append([xs,ys,testname])
+    create_bar_graph(data=data, semilog=semilog, add_bar_labels=add_bar_labels, title=args['title'], add_legend=True)
     return;
-
-
 
 
