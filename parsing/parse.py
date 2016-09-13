@@ -4,6 +4,7 @@ import fnmatch
 import re
 import random
 import hashlib
+import sys
 
 def find(pattern, path):
     result = []
@@ -25,9 +26,18 @@ def mkhash(values):
     value_string = (''.join([str(i) for i in values])).encode('utf-8')
     return hashlib.sha256(value_string).hexdigest()
 
-def rados_get_write_bandwidth( testname, size ):
-    mytable = database.fetch_bw(testname, ['write',size])
-    return float(mytable[0][1]);
+def get_rados_bandwidth( testname, testtype, size ):
+    mytable = database.fetch_bw(testname, [testtype,size])
+    if len(mytable) < 1:
+        print("Error: no data found")
+        sys.exit()
+    if testtype == 'write':
+        myreturn = mytable[0][1]
+    if testtype == 'seq':
+        myreturn = mytable[0][0]
+    if testtype == 'rand':
+        myreturn = mytable[0][0]
+    return float(myreturn);
 
 def parse_output( test, args ):
     if test == 'radosbench':
@@ -54,6 +64,7 @@ def parse_output( test, args ):
             params.extend([0,0])
             database.insert(params)
             pattern = re.compile('Bandwidth \(MB/sec\):\s+(\d+\.\d+)')
+#            print(params)
             for line in open(inputname):
                 m = pattern.match(line)
                 if m:
