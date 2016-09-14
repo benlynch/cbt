@@ -39,40 +39,87 @@ def get_rados_bandwidth( testname, testtype, size ):
         myreturn = mytable[0][0]
     return float(myreturn);
 
-def parse_output( test, args ):
-    if test == 'radosbench':
-        database.create_db()
-        files = []
-        for archive in args['archive']:
-            directory = args['path'] + '/'+ archive
-            files.extend(find('output.*', directory))
-        for inputname in files:
-            filepattern = re.compile(args['path'] + '/' + '(.+)')
-            m = filepattern.match(inputname)
-            mydirectory = m.group(1)
-            params = mydirectory.split("/")
-            # make readahead into an int
-            params[3] = int(params[3][7:])
-            # Make op_size into an int
-            params[4] = int(params[4][8:])
-            # Make cprocs into an int
-            params[5] = int(params[5][17:])
-            params[7] = params[6]
-            params[6] = random.random()
-            params_hash = mkhash(params)
-            params = [params_hash] + params
-            params.extend([0,0])
-            database.insert(params)
-            pattern = re.compile('Bandwidth \(MB/sec\):\s+(\d+\.\d+)')
-#            print(params)
-            for line in open(inputname):
-                m = pattern.match(line)
-                if m:
-                    bw = float(m.group(1))
-                    if  params[8] == 'write':
-                        database.update_writebw(params_hash, bw)
-                    else:
-                        database.update_readbw(params_hash, bw)
-    if test == 'fio':
-        print("soon")
+def parse_output( archives=[], path='.' ):
+    database.create_db()
+    #FIXME the database structure should be updated to include all the 
+    # fields currently produced by CBT. The code below ignores client readahead.
+    # The Rbdfio/rbdfio structure produced by CBT seems redundant.
+    #
+    #start by parsing the Radosbench output
+    files = []
+    for archive in archives:
+        directory = path + '/'+ archive + '/00000000/Radosbench'
+        files.extend(find('output.*', directory))
+    for inputname in files:
+        filepattern = re.compile(path + '/' + '(.+)')
+        m = filepattern.match(inputname)
+        mydirectory = m.group(1)
+        params = mydirectory.split("/")
+#        print(params)
+        # make readahead into an int
+        params[3] = int(params[3][7:])
+        # Make op_size into an int
+        params[4] = int(params[4][8:])
+        # Make cprocs into an int
+        params[5] = int(params[5][17:])
+        outputname = params[7]
+        params[7] = params[6]
+#       I'm not sure what iodepth should be for radosbench. Setting to 1
+        params[6] = 1
+#        print(params)
+        params = [outputname] + params 
+        params_hash = mkhash(params)
+        params = [params_hash] + params
+        params.extend([0,0])
+#        print(params)
+        database.insert(params)
+        pattern = re.compile('Bandwidth \(MB/sec\):\s+(\d+\.\d+)')
+        for line in open(inputname):
+            m = pattern.match(line)
+            if m:
+                bw = float(m.group(1))
+                if  params[9] == 'write':
+                    database.update_writebw(params_hash, bw)
+                else:
+                    database.update_readbw(params_hash, bw)
+    #repeat with fio output
+    files = []
+    for archive in archives:
+        directory = path + '/'+ archive + '/00000000/RbdFio'
+        files.extend(find('output.*', directory))
+    for inputname in files:
+        filepattern = re.compile(path + '/' + '(.+)')
+        m = filepattern.match(inputname)
+        mydirectory = m.group(1)
+        params = mydirectory.split("/")
+#        print(params)
+        # make readahead into an int
+        params[3] = int(params[4][7:])
+        # Make op_size into an int
+        params[4] = int(params[6][8:])
+        # Make cprocs into an int
+        params[5] = int(params[7][17:])
+        # Make iodepth into an int
+        params[6] = int(params[8][8:])
+        params[7] = params[9]
+        params[8] = 0.0
+        params[9] = 0.0
+        outputname = params.pop()
+        params = [outputname] + params
+        params_hash = mkhash(params)
+        params = [params_hash] + params
+#        print(params)
+        database.insert(params)
+        for line in open(inputname):
+            if "aggrb" in line:
+                 bw = getbw(splits(line, 'aggrb=', ','))
+                 if "READ" in line:
+                     database.update_readbw(params_hash, bw)
+                 elif "WRITE" in line:
+                     database.update_writebw(params_hash, bw)
+
+def splits(s,d1,d2):
+    l,_,r = s.partition(d1)
+    m,_,r = r.partition(d2)
+    return m
 

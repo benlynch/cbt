@@ -7,10 +7,15 @@ import re
 from os import listdir
 import sys
 sys.path.append("/home/support/blynch/cbt/parsing")
+import database
 import parse
 class cbtWorkspace:
     def __init__(self, path):
         self.path = path
+        self.arclist = self.ls()
+        self.arc_parsed = {} 
+        for arc in  self.arclist:
+            self.arc_parsed[arc] = False
 
     def __repr__(self):
         return "cbtWorkspace()"
@@ -22,8 +27,21 @@ class cbtWorkspace:
         dirlist = []
         for file in listdir(self.path):
             if os.path.isdir(self.path + '/' + file):
-                dirlist.append(file)
+                if os.path.isdir(self.path + '/' + file + '/00000000'): 
+                    dirlist.append(file)
         return dirlist
+
+    def describe(self, archives=False):
+        if not archives:
+            archives = self.ls()
+        for arc in archives:
+            # skip parsing any directory that we've already parsed once
+            if not self.arc_parsed[arc]:
+                parse.parse_output(archives=[arc], path=self.path )
+            self.arc_parsed[arc] = True 
+        pd.set_option('display.notebook_repr_html', True)
+        description = pd.DataFrame(database.fetch_desc(archives), columns=['Archive','Benchmark','Size','Test'])
+        print(description)
 
     def bar_graph(self, benchmark_runs, test_type, title='Insert Fancy Title Here', object_sizes=[],
             log=True, bar_label=True):
@@ -40,7 +58,10 @@ class cbtWorkspace:
             doc = {'radosbench':{'rand':{'x':{'sizes':object_sizes, 'concurrent':2},'y':{'log':log,'bar_label':bar_label}}}}
         args['doc'] = doc
         if 'radosbench' in doc.keys():
-            parse.parse_output('radosbench', args)
+            for arc in benchmark_runs:
+                 if not self.arc_parsed[arc]:
+                     parse.parse_output(archives=[arc], path=self.path)
+                 self.arc_parsed[arc] = True
             create_rados_graphs(args)
         
 
@@ -61,7 +82,7 @@ def bar_label(ax, rects, semilog):
             else:
                 label_position = height + (y_height * 0.01)
         ax.text(rect.get_x() + rect.get_width()/2., label_position,
-                '%5.2f' % height,
+                '%5.1f' % height,
                 ha='center', va='bottom')
 
 def check_graph_options (doc):
@@ -76,9 +97,10 @@ def check_graph_options (doc):
 
 def create_bar_graph( data=[[[1, 2],[10, 20]]], semilog=False, add_bar_labels=True, title='Insert Fancy Title', add_legend=False):
     pcolors = ['#0f5b78','#ef8b2c','#5ca793','#d94e1f','#117899','#ecaa38', '#0d3c55', '#c02e1d','#f16c20','#ebc844','#a2b86c','#1395ba']
-    width = 0.35
+    width = 0.33
     xs = data[0][0]
     if len(data) > 1:
+        width = 0.33*2/len(data)
     #plot comparison from multiple archives
         all_unique_x = {}
         for series in data:
@@ -110,7 +132,7 @@ def create_bar_graph( data=[[[1, 2],[10, 20]]], semilog=False, add_bar_labels=Tr
             bar_shift += width
         if semilog:
             ax.set_yscale('log')
-        ax.set_xticks(ind + width*3/2)
+        ax.set_xticks(ind + 0.59 - 0.045*len(data))
         if add_legend:
             plt.legend(loc=2)
     else:

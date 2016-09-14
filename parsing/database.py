@@ -2,8 +2,8 @@ import sqlite3
 
 conn = sqlite3.connect(':memory:')
 
-FORMAT=['hash', 'testname', 'iteration', 'benchmark', 'osdra', 'opsize', 'cprocs', 'iodepth', 'testtype', 'writebw', 'readbw']
-TYPES={'hash':'text primary key', 'testname':'text', 'iteration':'integer', 'benchmark':'text', 'osdra':'integer', 'opsize':'integer', 'cprocs':'integer', 'iodepth':'integer', 'testtype':'text', 'writebw':'real', 'readbw':'real'}
+FORMAT=['hash', 'outputname', 'testname', 'iteration', 'benchmark', 'osdra', 'opsize', 'cprocs', 'iodepth', 'testtype', 'writebw', 'readbw']
+TYPES={'hash':'text primary key', 'outputname':'text', 'testname':'text', 'iteration':'integer', 'benchmark':'text', 'osdra':'integer', 'opsize':'integer', 'cprocs':'integer', 'iodepth':'integer', 'testtype':'text', 'writebw':'real', 'readbw':'real'}
 
 def create_db():
     c = conn.cursor()
@@ -18,7 +18,7 @@ def create_db():
 
 def insert(values):
     c = conn.cursor()
-    c.execute('INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ? ,?, ?)', values)
+    c.execute('INSERT INTO results VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ? ,?, ?)', values)
 #    print (values) 
     conn.commit()
 
@@ -77,6 +77,15 @@ def fetch_bw(testname, params):
     c.execute('SELECT readbw, writebw FROM results WHERE testname = "' + testname + '" AND testtype = "' + params[0] + '" AND opsize = '+ str(params[1]) )
     for row in c.fetchall():
 #        print (row)
+        table.append(row)
+    return table;
+
+def fetch_desc(archives=[]):
+    c = conn.cursor()
+    table = []
+    c.execute('SELECT testname, benchmark, opsize, testtype FROM results WHERE testname IN (\'' + '\', \''.join(archives) + '\')' )
+#    c.execute('SELECT testname, benchmark, opsize, testtype FROM results')
+    for row in c.fetchall():
         table.append(row)
     return table;
 
