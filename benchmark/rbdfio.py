@@ -130,6 +130,9 @@ class RbdFio(Benchmark):
         logger.info('Running rbd fio %s test.', self.mode)
         common.pdsh(settings.getnodes('clients'), fio_cmd).communicate()
 
+        # dump the cluster config
+        self.cluster.dump_config(self.run_dir)
+
         # If we were doing recovery, wait until it's done.
         if 'recovery_test' in self.cluster.config:
             self.cluster.wait_recovery_done()
