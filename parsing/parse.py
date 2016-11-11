@@ -5,6 +5,7 @@ import re
 import random
 import hashlib
 import sys
+import json
 
 def find(pattern, path):
     result = []
@@ -28,15 +29,16 @@ def mkhash(values):
 
 def get_rados_bandwidth( testname, testtype, size ):
     mytable = database.fetch_bw(testname, [testtype,size])
+    myreturn = 0.0
     if len(mytable) < 1:
-        print("Error: no data found")
+        print(mytable, "Error: no data found")
         sys.exit()
     if testtype == 'write':
-        myreturn = mytable[0][1]
-    if testtype == 'seq':
-        myreturn = mytable[0][0]
-    if testtype == 'rand':
-        myreturn = mytable[0][0]
+        index = 1
+    else:
+        index = 0
+    for i in range(0, len(mytable)):
+        myreturn += mytable[i][index]
     return float(myreturn);
 
 def parse_output( archives=[], path='.' ):
@@ -49,13 +51,17 @@ def parse_output( archives=[], path='.' ):
     files = []
     for archive in archives:
         directory = path + '/'+ archive + '/00000000/Radosbench'
-        files.extend(find('output.*', directory))
+        files.extend(find('output.*.*', directory))
     for inputname in files:
         filepattern = re.compile(path + '/' + '(.+)')
         m = filepattern.match(inputname)
         mydirectory = m.group(1)
         params = mydirectory.split("/")
-#        print(params)
+        baselist=params[:]
+        baselist.pop()
+        basedir = '/'.join(baselist)
+        settings = []
+        settings.extend(find('ceph_settings.out.*', basedir))
         # make readahead into an int
         params[3] = int(params[3][7:])
         # Make op_size into an int
@@ -66,13 +72,17 @@ def parse_output( archives=[], path='.' ):
         params[7] = params[6]
 #       I'm not sure what iodepth should be for radosbench. Setting to 1
         params[6] = 1
-#        print(params)
         params = [outputname] + params 
         params_hash = mkhash(params)
         params = [params_hash] + params
         params.extend([0,0])
-#        print(params)
-        database.insert(params)
+        database.partial_insert(params)
+
+        if len(settings) > 0:
+            with open(settings[0]) as ceph_cluster_settings:
+                cluster_settings = json.load(ceph_cluster_settings)
+            database.update_columns(params[0],cluster_settings)
+
         pattern = re.compile('Bandwidth \(MB/sec\):\s+(\d+\.\d+)')
         for line in open(inputname):
             m = pattern.match(line)
